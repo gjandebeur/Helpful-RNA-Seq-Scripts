@@ -72,11 +72,34 @@ IVT2_filtered <- process_data(IVT2, "IVT2")
 #############################
 #combine library prep for downstream analyses
 ############################
-native_combined <- bind_rows(native1_filtered, native2_filtered)
-all_combined <- bind_rows(native1_filtered, native2_filtered, IVT1_filtered, IVT2_filtered)
+
+native_positions <- bind_rows(native1_filtered, native2_filtered) %>%
+  group_by(position) %>%
+  summarise(n_native = n_distinct(experiment), .groups = "drop") %>%
+  filter(n_native == 2) %>% # keep only in both
+  distinct(position)
+
+# Identify all IVT positions
+ivt_positions <- bind_rows(IVT1_filtered, IVT2_filtered) %>%
+  distinct(position, .keep_all = TRUE)
+
+# Find IVT positions found in both replicates
+ivt_positions_both <- bind_rows(IVT1_filtered, IVT2_filtered) %>%
+  group_by(position) %>%
+  summarise(n_ivt = n_distinct(experiment), .groups = "drop") %>%
+  filter(n_ivt == 2)
+
+ivt_2filtered <- bind_rows(IVT1_filtered, IVT2_filtered) %>%
+  inner_join(ivt_positions_both, by = "position")
+
+# Filter for native-only reproducible sites
+native_filtered <- bind_rows(native1_filtered, native2_filtered) %>%
+  inner_join(native_positions, by = "position") %>%
+  anti_join(ivt_positions, by = "position")
+#######################################
 
 # Save combined filtered data
-write.csv(native_combined, "../data/native_combined_clean.csv", row.names = FALSE)
+write.csv(native_filtered, "../data/native_filtered_clean.csv", row.names = FALSE)
 
 #downstream analyses to investigate further in the repository.
 # - expression_stoich_polyA_analysis.R
