@@ -97,7 +97,61 @@ native_filtered <- bind_rows(native1_filtered, native2_filtered) %>%
   inner_join(native_positions, by = "position") %>%
   anti_join(ivt_positions, by = "position")
 #######################################
+## view pre/post filtering sites per mod [QUALITY CONTROL STEP]
+###########
+all_combined_native <- bind_rows(native1, native2) %>%
+  mutate(gene_id = str_remove(GENEID, "^gene:"))
 
+# Count unique modified positions (unfiltered native)
+unfiltered_summary <- all_combined_native %>%
+  group_by(code) %>%
+  summarise(n_mods = n_distinct(position), .groups = "drop") %>%
+  mutate(filter_status = "unfiltered")
+
+# Count unique modified positions (filtered native)
+filtered_summary <- native_filtered %>%
+  group_by(mod) %>%
+  summarise(n_mods = n_distinct(position), .groups = "drop") %>%
+  mutate(filter_status = "filtered")
+
+# Because unfiltered uses 'code' and filtered uses 'mod', harmonize names for plotting
+unfiltered_summary <- unfiltered_summary %>%
+  rename(mod = code) %>%
+  mutate(mod = case_when(
+    mod == "a" ~ "m6A",
+    mod == "m" ~ "m5C",
+    mod == "17802" ~ "pseU",
+    mod == "17596" ~ "inosine",
+    mod == "69426" ~ "2'O-Me A",
+    mod == "19228" ~ "2'O-Me C",
+    mod == "19229" ~ "2'O-Me G",
+    mod == "19227" ~ "2'O-Me U",
+    TRUE ~ mod
+  ))
+
+combined_summary <- bind_rows(unfiltered_summary, filtered_summary)
+
+### Graph to visualize pre/post sites ###
+mod_filter_plot <- ggplot(combined_summary, aes(x = mod, y = n_mods, fill = filter_status)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_manual(
+    values = c("filtered" = "palegreen2", "unfiltered" = "turquoise3"),
+    name = NULL
+  ) +
+  labs(
+    y = "Number of Modified Positions",
+    x = NULL,
+    title = "Modifications Before and After Filtering"
+  ) +
+  theme_cowplot() +
+  expand_limits(y = 0) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(
+    legend.position = "top",
+    axis.ticks.x = element_blank()
+  )
+
+#############################
 # Save combined filtered data
 write.csv(native_filtered, "../data/native_filtered_clean.csv", row.names = FALSE)
 
